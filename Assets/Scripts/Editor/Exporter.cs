@@ -1,12 +1,7 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Networking;
-using Unity.EditorCoroutines.Editor;
 using System.Diagnostics;
 
 public class Exporter : EditorWindow
@@ -27,8 +22,25 @@ public class Exporter : EditorWindow
     }
 
     SceneAsset scene = null;
-    string bearerKey = "Bearer Key";
     string nodeJSPath = "NODEJS Path";
+    static string webserver_path = "";
+    static string webserver_url = "";
+    static string assetBundleDirectory = "Assets/AssetBundles";
+    static BuildTarget buildTarget = BuildTarget.StandaloneWindows;
+
+    [MenuItem("Custom Tools/Build Asset Bundles")]
+    public static void BuildAssetBundles()
+    {
+        if (!Directory.Exists(assetBundleDirectory))
+            Directory.CreateDirectory(assetBundleDirectory);
+
+        BuildPipeline.BuildAssetBundles(assetBundleDirectory, BuildAssetBundleOptions.None, buildTarget);
+        foreach (var name in AssetDatabase.GetAllAssetBundleNames())
+        {
+            UnityEngine.Debug.Log(name);
+            AssetDatabase.RemoveAssetBundleName(name, true);
+        }
+    }
 
     [MenuItem("Custom Tools/Exporter")]
     public static void Init()
@@ -48,14 +60,23 @@ public class Exporter : EditorWindow
         scene = (SceneAsset)EditorGUI.ObjectField(new Rect(3, 3, position.width - 6, 20), "Find Dependency", scene, typeof(SceneAsset), true);
         if (scene)
         {
-            bearerKey = GUI.PasswordField(new Rect(3, 25, position.width - 6, 20), bearerKey, '*');
-            nodeJSPath = GUI.TextField(new Rect(3, 45, position.width - 6, 20), nodeJSPath);
-            if (GUI.Button(new Rect(3, 65, position.width - 3, 20), "Export"))
+            nodeJSPath = GUI.TextField(new Rect(3, 25, position.width - 6, 20), nodeJSPath);
+            if (GUI.Button(new Rect(3, 45, position.width - 3, 20), "Export"))
             {
                 string[] assets = new string[1] { AssetDatabase.GetAssetPath(scene) };
                 string fileName = GetProjectName() + "_" + GetSceneName(AssetDatabase.GetAssetPath(scene)) + "_" + RandomString(5) + ".unitypackage";
                 AssetDatabase.ExportPackage(assets, fileName, ExportPackageOptions.Recurse | ExportPackageOptions.IncludeDependencies);
-                EditorCoroutineUtility.StartCoroutine(Upload(fileName), this);
+                File.Copy(fileName, Path.Combine(webserver_path, fileName));
+                string data = ExecProcess(nodeJSPath, "Assets/Scripts/Editor/ocean/index.js useLocal=true fileUrl=" + webserver_url + "/" + fileName);
+                string[] _data = data.Split('|');
+
+                string objectName = _data[0].Split('=')[1];
+                string poolDatatokenAddress = _data[1].Split('=')[1];
+                string ddo_id = _data[2].Split('=')[1]; 
+                string poolAddress = _data[3].Split('=')[1];
+                string ddro_services0_id = _data[4].Split('=')[1];
+
+                P2PConnector.BroadcastNewAssetBundle(objectName, poolDatatokenAddress, ddo_id, poolAddress, ddro_services0_id);
             }
         }
         else
@@ -82,55 +103,9 @@ public class Exporter : EditorWindow
             .Select(s => s[new System.Random().Next(s.Length)]).ToArray());
     }
 
-    IEnumerator Upload(string file)
-    {
-        Dictionary<string, string> postHeader = new Dictionary<string, string>();
-        postHeader.Add("Authorization", "Bearer " + bearerKey);
-        postHeader.Add("Dropbox-API-Arg", "{\"autorename\":false,\"mode\":\"add\",\"mute\":false,\"path\":\"/test/ " + file + "\",\"strict_conflict\":false}");
-        postHeader.Add("Content-Type", "application/octet-stream");
-        byte[] myData = File.ReadAllBytes(file);
-        using (WWW www = new WWW("https://content.dropboxapi.com/2/files/upload", myData, postHeader))
-        {
-            yield return www;
-            if (www.error != null)
-            {
-               UnityEngine.Debug.Log(www.error);
-            }
-            else
-            {
-                UnityEngine.Debug.Log("Success! " + www.text);
-                UPLOADJSONOBJ obj = JsonUtility.FromJson<UPLOADJSONOBJ>(www.text);
-                EditorCoroutineUtility.StartCoroutine(GetUrl(obj.path_lower), this);
-            }
-        }
-    }
-
-    IEnumerator GetUrl(string file)
-    {
-        Dictionary<string, string> postHeader = new Dictionary<string, string>();
-        postHeader.Add("Authorization", "Bearer " + bearerKey);
-        postHeader.Add("Content-Type", "application/json");
-        string body = "{ \"path\": \"" + file + "\" }";
-        using (WWW www = new WWW("https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings", System.Text.Encoding.UTF8.GetBytes(body), postHeader))
-        {
-            yield return www;
-            if (www.error != null)
-            {
-                UnityEngine.Debug.Log(www.error + " - " + www.text);
-            }
-            else
-            {
-                UnityEngine.Debug.Log("Success! " + www.text);
-                LINKJSONOBJ obj = JsonUtility.FromJson<LINKJSONOBJ>(www.text);
-                ExecProcess(nodeJSPath, "Assets/Scripts/Editor/ocean/index.js useLocal=true fileUrl=" + obj.url);// " + obj.url);
-            }
-        }
-    }
-
-    public static void ExecProcess(string name, string args)
+    public static string ExecProcess(string name, string args)
     {
         Process p = new Process();
-        UnityEngine.Debug.Log("starting process: " + name + " args:" + args);
         p.StartInfo.FileName = name;
         p.StartInfo.Arguments = args;
         p.StartInfo.RedirectStandardOutput = true;
@@ -143,5 +118,6 @@ public class Exporter : EditorWindow
         string error = p.StandardError.ReadToEnd();
         UnityEngine.Debug.Log(info);
         UnityEngine.Debug.Log(error);
+        return info;
     }
 }

@@ -55,7 +55,7 @@ const POOL_NFT_NAME = "Datatoken 1";
 const POOL_NFT_SYMBOL = "DT1";
 //to build: npx tscp -w
 ///test: https://raw.githubusercontent.com/oceanprotocol/testdatasets/main/shs_dataset_test.txt
-function init(fileUrl, useLocal) {
+function init(fileUrl, useLocal, objectName) {
     return __awaiter(this, void 0, void 0, function* () {
         if (!fileUrl || fileUrl.length <= 0) {
             console.error("Invalid File URL! Set arguments like this: node index.js fileUrl=<url>");
@@ -94,19 +94,13 @@ function init(fileUrl, useLocal) {
                 },
             ],
         };
-        console.log("initializing");
         config = yield (0, config_1.getTestConfig)(config_1.web3);
         aquarius = new lib_1.Aquarius(config.metadataCacheUri);
         providerUrl = useLocal ? "http://localhost:8030/" : config.providerUri;
-        console.log(`Aquarius URL: ${config.metadataCacheUri}`);
-        console.log(`Provider URL: ${providerUrl}`);
         const accounts = yield config_1.web3.eth.getAccounts();
         publisherAccount = accounts[0];
         consumerAccount = accounts[1];
         stakerAccount = accounts[2];
-        console.log(`Publisher account address: ${publisherAccount}`);
-        console.log(`Consumer account address: ${consumerAccount}`);
-        console.log(`Staker account address: ${stakerAccount}`);
         addresses = (0, config_1.getAddresses)();
         const oceanContract = new config_1.web3.eth.Contract(MockERC20.abi, addresses.Ocean);
         yield oceanContract.methods
@@ -153,21 +147,14 @@ function init(fileUrl, useLocal) {
         poolNftAddress = tx.events.NFTCreated.returnValues[0];
         poolDatatokenAddress = tx.events.TokenCreated.returnValues[0];
         poolAddress = tx.events.NewPool.returnValues[0];
-        console.log(`Pool NFT address: ${poolNftAddress}`);
-        console.log(`Pool Datatoken address: ${poolDatatokenAddress}`);
-        console.log(`Pool address: ${poolAddress}`);
-        console.log("creating nft");
         const nft = new lib_1.Nft(config_1.web3);
         DDO.chainId = yield config_1.web3.eth.getChainId();
         const checksum = (0, sha256_1.default)(config_1.web3.utils.toChecksumAddress(poolNftAddress) + DDO.chainId.toString(10));
         DDO.id = "did:op:" + checksum;
         DDO.nftAddress = poolNftAddress;
         const encryptedFiles = yield lib_1.ProviderInstance.encrypt(ASSET_URL, providerUrl);
-        console.log("encrypted files:", encryptedFiles);
         DDO.services[0].files = encryptedFiles;
-        console.log("files");
         DDO.services[0].datatokenAddress = poolDatatokenAddress;
-        console.log(`DID: ${DDO.id}`);
         const providerResponse = yield lib_1.ProviderInstance.encrypt(DDO, providerUrl);
         const encryptedDDO = providerResponse;
         const metadataHash = (0, lib_1.getHash)(JSON.stringify(DDO));
@@ -175,11 +162,21 @@ function init(fileUrl, useLocal) {
         const pool = new lib_1.Pool(config_1.web3);
         yield (0, lib_1.approve)(config_1.web3, stakerAccount, addresses.Ocean, poolAddress, "5", true);
         yield pool.joinswapExternAmountIn(stakerAccount, poolAddress, "5", "0.1");
-        const prices = yield pool.getAmountInExactOut(poolAddress, poolDatatokenAddress, addresses.Ocean, "1", "0.01");
-        console.log(`Price of 1 ${POOL_NFT_SYMBOL} is ${prices.tokenAmount} OCEAN`);
+        yield pool.getAmountInExactOut(poolAddress, poolDatatokenAddress, addresses.Ocean, "1", "0.01");
+        console.log("objectName=" +
+            objectName +
+            "|poolDatatokenAddress=" +
+            poolDatatokenAddress +
+            "|ddo_id=" +
+            DDO.id +
+            "|poolAddress=" +
+            poolAddress +
+            "|ddro_services0_id=" +
+            DDO.services[0].id);
     });
 }
 let url = "";
+let objectName = "";
 let useLocal = false;
 let error = false;
 try {
@@ -190,6 +187,9 @@ try {
         if (process.argv[i].startsWith("useLocal=")) {
             useLocal = process.argv[i].split("=")[1] === "true";
         }
+        if (process.argv[i].startsWith("objectName=")) {
+            objectName = process.argv[i].split("=")[1];
+        }
     }
 }
 catch (e) {
@@ -197,5 +197,5 @@ catch (e) {
     error = true;
 }
 if (error === false) {
-    init(url, useLocal);
+    init(url, useLocal, objectName);
 }

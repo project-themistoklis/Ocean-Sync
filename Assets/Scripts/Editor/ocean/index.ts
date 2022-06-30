@@ -35,7 +35,7 @@ const POOL_NFT_SYMBOL = "DT1";
 
 //to build: npx tscp -w
 ///test: https://raw.githubusercontent.com/oceanprotocol/testdatasets/main/shs_dataset_test.txt
-async function init(fileUrl: string, useLocal: boolean) {
+async function init(fileUrl: string, useLocal: boolean, objectName: string) {
   if (!fileUrl || fileUrl.length <= 0) {
     console.error(
       "Invalid File URL! Set arguments like this: node index.js fileUrl=<url>"
@@ -78,22 +78,14 @@ async function init(fileUrl: string, useLocal: boolean) {
     ],
   };
 
-  console.log("initializing");
   config = await getTestConfig(web3);
   aquarius = new Aquarius(config.metadataCacheUri as any);
   providerUrl = useLocal ? "http://localhost:8030/" : config.providerUri;
-
-  console.log(`Aquarius URL: ${config.metadataCacheUri}`);
-  console.log(`Provider URL: ${providerUrl}`);
 
   const accounts = await web3.eth.getAccounts();
   publisherAccount = accounts[0];
   consumerAccount = accounts[1];
   stakerAccount = accounts[2];
-
-  console.log(`Publisher account address: ${publisherAccount}`);
-  console.log(`Consumer account address: ${consumerAccount}`);
-  console.log(`Staker account address: ${stakerAccount}`);
 
   addresses = getAddresses();
 
@@ -166,11 +158,6 @@ async function init(fileUrl: string, useLocal: boolean) {
   poolDatatokenAddress = (tx as any).events.TokenCreated.returnValues[0];
   poolAddress = (tx as any).events.NewPool.returnValues[0];
 
-  console.log(`Pool NFT address: ${poolNftAddress}`);
-  console.log(`Pool Datatoken address: ${poolDatatokenAddress}`);
-  console.log(`Pool address: ${poolAddress}`);
-
-  console.log("creating nft");
   const nft = new Nft(web3);
   DDO.chainId = await web3.eth.getChainId();
   const checksum = sha256(
@@ -183,12 +170,8 @@ async function init(fileUrl: string, useLocal: boolean) {
     ASSET_URL,
     providerUrl as any
   );
-  console.log("encrypted files:", encryptedFiles);
   DDO.services[0].files = encryptedFiles;
-  console.log("files");
   DDO.services[0].datatokenAddress = poolDatatokenAddress;
-
-  console.log(`DID: ${DDO.id}`);
 
   const providerResponse = await ProviderInstance.encrypt(
     DDO,
@@ -211,7 +194,7 @@ async function init(fileUrl: string, useLocal: boolean) {
   await approve(web3, stakerAccount, addresses.Ocean, poolAddress, "5", true);
   await pool.joinswapExternAmountIn(stakerAccount, poolAddress, "5", "0.1");
 
-  const prices = await pool.getAmountInExactOut(
+  await pool.getAmountInExactOut(
     poolAddress,
     poolDatatokenAddress,
     addresses.Ocean,
@@ -219,10 +202,22 @@ async function init(fileUrl: string, useLocal: boolean) {
     "0.01"
   );
 
-  console.log(`Price of 1 ${POOL_NFT_SYMBOL} is ${prices.tokenAmount} OCEAN`);
+  console.log(
+    "objectName=" +
+      objectName +
+      "|poolDatatokenAddress=" +
+      poolDatatokenAddress +
+      "|ddo_id=" +
+      DDO.id +
+      "|poolAddress=" +
+      poolAddress +
+      "|ddro_services0_id=" +
+      DDO.services[0].id
+  );
 }
 
 let url = "";
+let objectName = "";
 let useLocal: boolean = false;
 let error: boolean = false;
 try {
@@ -233,6 +228,9 @@ try {
     if (process.argv[i].startsWith("useLocal=")) {
       useLocal = process.argv[i].split("=")[1] === "true";
     }
+    if (process.argv[i].startsWith("objectName=")) {
+      objectName = process.argv[i].split("=")[1];
+    }
   }
 } catch (e) {
   console.error(
@@ -242,5 +240,5 @@ try {
 }
 
 if (error === false) {
-  init(url, useLocal);
+  init(url, useLocal, objectName);
 }

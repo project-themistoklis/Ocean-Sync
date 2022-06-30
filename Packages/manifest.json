@@ -1,6 +1,8 @@
 {
   "dependencies": {
     "com.elringus.unitygoogledrive": "https://github.com/Elringus/UnityGoogleDrive.git#package",
+    "com.unity.addressables": "1.19.19",
+    "com.unity.assetbundlebrowser": "https://github.com/Unity-Technologies/AssetBundles-Browser.git",
     "com.unity.collab-proxy": "1.15.15",
     "com.unity.feature.development": "1.0.1",
     "com.unity.ide.rider": "3.0.13",
