@@ -59,4 +59,5 @@ sysinfo.txt
 crashlytics-build.properties
 
 Assets/Scripts/Editor/ocean/node_modules/
+Web Server/node_modules/
 
